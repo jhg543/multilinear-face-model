@@ -24,3 +24,6 @@ pip install pyopengl pillow
 
     -I "%python_path%/include"
     -L "%python_path%/libs"
+
+Note:
+If installing PyOpenGL from easy_install, pip or conda, make sure that you have already installed a GLUT implementation, such as FreeGLUT
