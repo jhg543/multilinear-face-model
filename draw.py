@@ -30,42 +30,55 @@ def read_mesh_desc_file():
     return np.array(vertexes, np.float32), np.array(triangles, np.uint32), np.array(landmark_vertex_index, np.uint32)
 
 
-# TODO define a func to pass vertexes, rotation, projection matrix
-global_parameters = read_mesh_desc_file()
+# 0 = vertex 1 = triangle index 2 = landmark index 3 = f in projection matrix
+parameters = [None for i in range(4)]
+
+
+def initialize_parameters():
+    parameters[0:3] = read_mesh_desc_file()
+    parameters[3] = 1.5
+
+
+initialize_parameters()
+
+
+def write_parameters(index, value):
+    parameters[index] = value
+    glutPostRedisplay()
 
 
 def load_parameters():
-    vertexes, triangles, landmarks = global_parameters
-    return vertexes, triangles, landmarks
+    return parameters
 
 
-def draw_mesh(v, t, x):
+def draw_mesh(vertexes, triangles, landmarks):
     glEnableClientState(GL_VERTEX_ARRAY)
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_LIGHTING)
-    glVertexPointer(3, GL_FLOAT, 0, v)
+    glVertexPointer(3, GL_FLOAT, 0, vertexes)
     # fill triangles
-    glDrawElements(GL_TRIANGLES, t.size, GL_UNSIGNED_INT, t)
+    glDrawElements(GL_TRIANGLES, triangles.size, GL_UNSIGNED_INT, triangles)
 
     # mesh lines
     glDisable(GL_LIGHTING)
     glColor4f(0.2, 0.2, 0.2, 0.5)
-    glDrawElements(GL_LINE_LOOP, t.size, GL_UNSIGNED_INT, t)
+    glDrawElements(GL_LINE_LOOP, triangles.size, GL_UNSIGNED_INT, triangles)
 
     # show landmarks
     glDisable(GL_DEPTH_TEST)
     glColor3fv((1, 0, 0))
     glPointSize(8)
-    glDrawElements(GL_POINTS, x.size, GL_UNSIGNED_INT, x)
+    glDrawElements(GL_POINTS, landmarks.size, GL_UNSIGNED_INT, landmarks)
     glDisableClientState(GL_VERTEX_ARRAY)
 
 
 def draw2():
-    vertexes, triangles, landmarks = load_parameters()
+    vertexes, triangles, landmarks, f = load_parameters()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     glLoadIdentity()
-    gluPerspective(75, 800 / 800, 0.1, 87)
+    glMultMatrixf(np.array([[f, 0, 0, 0], [0, f, 0, 0], [0, 0, -1, -1], [0, 0, -0.01, 0]], dtype=np.float32))
+    # gluPerspective(75, 800 / 800, 0.1, 100)
     gluLookAt(*(0.5, 0.6, 2), *(0, 0.1, 0), *(0, 1, 0))
 
     # 画人头
@@ -73,18 +86,18 @@ def draw2():
     draw_mesh(vertexes, triangles, landmarks)
 
     # 画叠上去
-    glLoadIdentity()
-    glEnable(GL_TEXTURE_2D)
-    glColor4f(1, 1, 1, 0.5)
-    with quads(texture=1):
-        glVertex2f(-1, -1)
-        glTexCoord2f(1, 0)
-        glVertex2f(1, -1)
-        glTexCoord2f(1, 1)
-        glVertex2f(1, 1)
-        glTexCoord2f(0, 1)
-        glVertex2f(-1, 1)
-        glTexCoord2f(0, 0)
+    # glLoadIdentity()
+    # glEnable(GL_TEXTURE_2D)
+    # glColor4f(1, 1, 1, 0.5)
+    # with quads(texture=1):
+    #     glVertex2f(-1, -1)
+    #     glTexCoord2f(1, 0)
+    #     glVertex2f(1, -1)
+    #     glTexCoord2f(1, 1)
+    #     glVertex2f(1, 1)
+    #     glTexCoord2f(0, 1)
+    #     glVertex2f(-1, 1)
+    #     glTexCoord2f(0, 0)
 
     glutSwapBuffers()
 
@@ -146,3 +159,4 @@ def nohub_draw_cycle():
 
 if __name__ == '__main__':
     nohub_draw_cycle()
+
