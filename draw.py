@@ -2,7 +2,7 @@ from pythongl import *
 import threading
 from PIL import Image
 import numpy as np
-
+import cv2
 
 def read_mesh_desc_file():
     """
@@ -32,7 +32,7 @@ def read_mesh_desc_file():
 
 # 0 = vertex 1 = triangle index 2 = landmark index 3 = f in projection matrix
 parameters = [None for i in range(4)]
-
+camera_photo = None
 
 def initialize_parameters():
     parameters[0:3] = read_mesh_desc_file()
@@ -86,21 +86,45 @@ def draw2():
     draw_mesh(vertexes, triangles, landmarks)
 
     # 画叠上去
-    # glLoadIdentity()
-    # glEnable(GL_TEXTURE_2D)
-    # glColor4f(1, 1, 1, 0.5)
-    # with quads(texture=1):
-    #     glVertex2f(-1, -1)
-    #     glTexCoord2f(1, 0)
-    #     glVertex2f(1, -1)
-    #     glTexCoord2f(1, 1)
-    #     glVertex2f(1, 1)
-    #     glTexCoord2f(0, 1)
-    #     glVertex2f(-1, 1)
-    #     glTexCoord2f(0, 0)
+    if camera_photo is not None:
+        set_photo(camera_photo)
+        glLoadIdentity()
+        glEnable(GL_TEXTURE_2D)
+        glColor4f(1, 1, 1, 0.5)
+        with quads(texture=1):
+            glVertex2f(-1, -1)
+            glTexCoord2f(1, 0)
+            glVertex2f(1, -1)
+            glTexCoord2f(1, 1)
+            glVertex2f(1, 1)
+            glTexCoord2f(0, 1)
+            glVertex2f(-1, 1)
+            glTexCoord2f(0, 0)
 
     glutSwapBuffers()
 
+def set_photo(cv_img):
+    img = Image.fromarray(cv2.cvtColor(cv_img,cv2.COLOR_BGR2RGB))
+    width, height = img.size
+    img = img.tobytes('raw', 'RGB', 0, -1)
+    glBindTexture(GL_TEXTURE_2D, 1)
+    glTexImage2D(GL_TEXTURE_2D, 0, 4,
+                 width, height, 0, GL_RGB,
+                 GL_UNSIGNED_BYTE, img)
+    glTexParameterf(GL_TEXTURE_2D,
+                    GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+    glTexParameterf(GL_TEXTURE_2D,
+                    GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+
+def update_from_camera():
+    global camera_photo
+    # 1用前置摄像头
+    cap = cv2.VideoCapture(1)
+    while(1):
+        ret, frame = cap.read()
+        if frame is None:
+            raise Exception('摄像头坏了。')
+        camera_photo=frame
 
 def init():
     glutInit()
@@ -131,30 +155,21 @@ def init():
 
     glEnable(GL_TEXTURE_2D)
     glGenTextures(10)
-    img = Image.open('test.png')
-    width, height = img.size
-    img = img.tobytes('raw', 'RGBA', 0, -1)
-    glBindTexture(GL_TEXTURE_2D, 1)
-    glTexImage2D(GL_TEXTURE_2D, 0, 4,
-                 width, height, 0, GL_RGBA,
-                 GL_UNSIGNED_BYTE, img)
-    glTexParameterf(GL_TEXTURE_2D,
-                    GL_TEXTURE_MAG_FILTER, GL_NEAREST)
-    glTexParameterf(GL_TEXTURE_2D,
-                    GL_TEXTURE_MIN_FILTER, GL_LINEAR)
     glTexEnvf(GL_TEXTURE_ENV,
               GL_TEXTURE_ENV_MODE, GL_MODULATE)
-
 
 def main_draw():
     init()
     glutDisplayFunc(draw2)
+    glutIdleFunc(draw2)
     glutMainLoop()
 
 
 def nohub_draw_cycle():
     t = threading.Thread(target=main_draw)
     t.start()
+    t2 = threading.Thread(target=update_from_camera)
+    t2.start()
 
 
 if __name__ == '__main__':
