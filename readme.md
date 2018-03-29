@@ -18,7 +18,7 @@ main.cpp是c++綁定(不過感覺很隨便)。
 
 python3
 
-pip install pyopengl pillow
+pip install pyopengl glfw opencv-contrib-python
 
 如果你要運行c++的話，還應當:
 
