@@ -9,7 +9,8 @@ import glfw
 # 3 = f in projection matrix
 # 4 = 2d image to show
 # 5 = ground truth opacity ( setting )
-parameters = [None for i in range(6)]
+# 6 = ground truth image aspect ratio w/h
+parameters = [None for i in range(7)]
 
 
 def write_parameters(index, value):
@@ -24,7 +25,7 @@ def draw_mesh(vertexes, triangles, landmarks):
     glEnableClientState(GL_VERTEX_ARRAY)
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_LIGHTING)
-    glVertexPointer(3, GL_FLOAT, 0, vertexes)
+    glVertexPointer(4, GL_FLOAT, 0, vertexes)
     # fill triangles
     glDrawElements(GL_TRIANGLES, triangles.size, GL_UNSIGNED_INT, triangles)
 
@@ -42,13 +43,13 @@ def draw_mesh(vertexes, triangles, landmarks):
 
 
 def render():
-    vertexes, triangles, landmarks, f, gt, gt_opacity = load_parameters()
+    vertexes, triangles, landmarks, f, gt, gt_opacity, gt_aspectratio = load_parameters()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     glLoadIdentity()
     glMultMatrixf(np.array([[f, 0, 0, 0], [0, f, 0, 0], [0, 0, -1, -1], [0, 0, -0.01, 0]], dtype=np.float32))
     # gluPerspective(75, 800 / 800, 0.1, 100)
-    gluLookAt(*(0.5, 0.6, 2), *(0, 0.1, 0), *(0, 1, 0))
+    # gluLookAt(*(0, 0, 3), *(0, 0, 0), *(0, 1, 0))
 
     # 画人头
     glDisable(GL_TEXTURE_2D)
@@ -60,15 +61,28 @@ def render():
         glLoadIdentity()
         glEnable(GL_TEXTURE_2D)
         glColor4f(1, 1, 1, gt_opacity)
-        with quads(texture=1):
-            glVertex2f(-1, -1)
-            glTexCoord2f(0, 1)
-            glVertex2f(1, -1)
-            glTexCoord2f(0, 0)
-            glVertex2f(1, 1)
-            glTexCoord2f(1, 0)
-            glVertex2f(-1, 1)
-            glTexCoord2f(1, 1)
+        if gt_aspectratio>1:
+            gt_aspectratio = 1/gt_aspectratio
+            with quads(texture=1):
+                glVertex2f(-1, -gt_aspectratio)
+                glTexCoord2f(0, 1)
+                glVertex2f(1, -gt_aspectratio)
+                glTexCoord2f(0, 0)
+                glVertex2f(1, gt_aspectratio)
+                glTexCoord2f(1, 0)
+                glVertex2f(-1, gt_aspectratio)
+                glTexCoord2f(1, 1)
+        else:
+            with quads(texture=1):
+                glVertex2f(-gt_aspectratio, -1)
+                glTexCoord2f(0, 1)
+                glVertex2f(gt_aspectratio, -1)
+                glTexCoord2f(0, 0)
+                glVertex2f(gt_aspectratio, 1)
+                glTexCoord2f(1, 0)
+                glVertex2f(-gt_aspectratio, 1)
+                glTexCoord2f(1, 1)
+
 
 
 def set_photo(img):
@@ -135,7 +149,7 @@ def glfw_main():
     if not glfw.init():
         return
     # Create a windowed mode window and its OpenGL context
-    window = glfw.create_window(800, 600, "Display", None, None)
+    window = glfw.create_window(800, 800, "Display", None, None)
     if not window:
         glfw.terminate()
         return
@@ -168,6 +182,7 @@ if __name__ == '__main__':
     write_parameters(0, vertex)
     write_parameters(1, triangle)
     write_parameters(2, landmark)
-    write_parameters(3, 1.5)
+    write_parameters(3, 5)
     write_parameters(5, 0.8)
+    write_parameters(6, 1)
     start_render_loop_thread()

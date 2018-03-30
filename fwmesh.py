@@ -12,7 +12,7 @@ def read_mesh_def():
         for line in meshfile:
             row = line.split()
             if row[0] == 'v':
-                vertexes += [float(i) for i in row[1:]]
+                vertexes += [float(i) for i in row[1:]]+[1]
             elif row[0] == 'f':
                 v0, v1, v2, v3 = [int(s.split('/')[0]) - 1 for s in row[1:]]
                 triangles += [v0, v1, v2, v0, v2, v3]
