@@ -8,8 +8,39 @@ import landmark_detector
 import vertex_screen
 
 
+def get_blend_shape(core_id, v_id):
+    return T.mode_dot(core_id, np.expand_dims(v_id, axis=0), 0)[0]
+
+
+def vec_to_xyzw(v):
+    x = v.shape[0] // 3
+    r = np.ones((x, 4), dtype=v.dtype)
+    r[:, :-1] = v.reshape((-1, 3))
+    return r.transpose()
+
+
+def screen_xyzw_to_pixel(v, l, cw, ch):
+    x, y = v[0:2] * l / v[3]
+    return (-int(x) + cw, -int(y) + ch)
+
+
+def landmark_detection_to_screen_xy(d, w, h):
+    le = w
+    if h > w:
+        le = h
+    d = d - np.array([w // 2, h // 2])
+    a = np.divide(d, le / 2, dtype=np.float32)
+    return a
+
+
+def truncate_core_tensor(core_tensor, mean_vertex_axis, landmarks):
+    c = landmarks * 3
+    index = np.stack((c, c + 1, c + 2)).transpose().flatten()
+    return core_tensor[:, :, index], mean_vertex_axis[index]
+
+
 def test():
-    focus_length = 0.8
+    focus_length = 1.5
     min_keyframes = 20
     keyframes = []
     vertex, triangle, landmark = fwmesh.read_mesh_def()
@@ -23,18 +54,11 @@ def test():
     se, ue, si, ui, c, m = fwmodel.load_compact_svd('C:\\dev\\3dface\\svd2', 40, 47)
     c = T.mode_dot(c, ue, 1)  # we don't need SVD on exp axis
 
-    def get_blend_shape(core_id, v_id):
-        return T.mode_dot(core_id, np.expand_dims(v_id, axis=0), 0)[0]
-
-    def vec_to_xyzw(v):
-        x = v.shape[0] // 3
-        r = np.ones((x, 4), dtype=v.dtype)
-        r[:, :-1] = v.reshape((-1, 3))
-        return r.transpose()
-
-    def screen_xyzw_to_pixel(v, l, cw, ch):
-        x, y = v[0:2] * l / v[3]
-        return (-int(x) + cw, -int(y) + ch)
+    d, md = truncate_core_tensor(c, m, landmark)
+    rx = vertex_screen.rt(vec_to_xyzw(get_blend_shape(d, ui[8])[7] + md), 0, 0, -2, 0.1, 0.1,
+                          0.1).transpose()
+    dx = vertex_screen.proj(rx.transpose(), focus_length).transpose()
+    print(rx[0])
 
     rv = vertex_screen.rt(vec_to_xyzw(get_blend_shape(c, ui[8])[7] + m), 0, 0, -2, 0.1, 0.1,
                           0.1).transpose()
@@ -50,7 +74,7 @@ def test():
     draw.write_parameters(6, w / h)
     print(w, h)
     long_edge = w
-    if (h > w):
+    if h > w:
         long_edge = h
     while True:
         ret, frame = cap.read()
@@ -60,14 +84,18 @@ def test():
         d = landmark_detector.detect_landmark_68(img)
         if d is not None:
             if len(keyframes) < min_keyframes:
-                keyframes.append(d)
+                keyframes.append(landmark_detection_to_screen_xy(d, w, h))
             for i in range(68):
                 x, y = d[i]
                 cv2.circle(img, (x, y), 3, (0, 255, 255))
-                # cv2.putText(img, "{}".format(i), (x, y), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
-        for i in landmark:
-            sc = screen_xyzw_to_pixel(scx[i], long_edge // 2, w // 2, h // 2)
+                cv2.putText(img, "{}".format(i), (x, y), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
+        # for i in landmark:
+        #     sc = screen_xyzw_to_pixel(scx[i], long_edge // 2, w // 2, h // 2)
+        #     cv2.circle(img, sc, 2, (255, 0, 255))
+        for i in range(dx.shape[0]):
+            sc = screen_xyzw_to_pixel(dx[i], long_edge // 2, w // 2, h // 2)
             cv2.circle(img, sc, 2, (255, 0, 255))
+            cv2.putText(img, "{}".format(i), sc, cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
         draw.write_parameters(4, img)
 
 
