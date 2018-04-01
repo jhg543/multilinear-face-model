@@ -12,7 +12,7 @@ def read_mesh_def():
         for line in meshfile:
             row = line.split()
             if row[0] == 'v':
-                vertexes += [float(i) for i in row[1:]]+[1]
+                vertexes += [float(i) for i in row[1:]] + [1]
             elif row[0] == 'f':
                 v0, v1, v2, v3 = [int(s.split('/')[0]) - 1 for s in row[1:]]
                 triangles += [v0, v1, v2, v0, v2, v3]
@@ -24,4 +24,11 @@ def read_mesh_def():
                              7191, 7225,
                              7248, 8799, 8814, 8815, 8817, 8865, 8935, 8952, 9342, 9415, 10314, 10459, 10538, 10655,
                              10778, 10855]
-    return np.array(vertexes, np.float32), np.array(triangles, np.uint32), np.array(landmark_vertex_index, np.uint32)
+    landmark_vertex_index = np.array(landmark_vertex_index, np.uint32)
+    landmark_order = [60, 45, 43, 41, 42, 6, 7, 39, 40, 19, 64, 0, 20, 21, 4, 1, 23,
+                      47, 49, 61, 50, 48, 26, 2, 67, 27, 25,
+                      24, 22, 59, 36, 5, 37, 58, 18, 63,
+                      38, 35, 32, 54, 62, 16, 13, 11, 14, 55, 33, 57,
+                      56, 31, 17, 12, 10, 15, 53, 34]
+
+    return np.array(vertexes, np.float32), np.array(triangles, np.uint32), landmark_vertex_index[landmark_order]
