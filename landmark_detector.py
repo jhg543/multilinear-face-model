@@ -26,6 +26,8 @@ def detect_landmark_68(img):
         for i in range(68):
             a = shape.part(i)
             r[i] = (a.x, a.y)
+            if a.y < 3 or a.y > h - 3 or a.x < 3 or a.x > w - 3:
+                return None
         return r
 
 
