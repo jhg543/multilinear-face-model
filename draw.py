@@ -10,7 +10,8 @@ import glfw
 # 4 = 2d image to show
 # 5 = ground truth opacity ( setting )
 # 6 = ground truth image aspect ratio w/h
-parameters = [None for i in range(7)]
+# 7 = vertex_size( 3 or 4)
+parameters = [None for i in range(8)]
 
 
 def write_parameters(index, value):
@@ -21,11 +22,11 @@ def load_parameters():
     return parameters
 
 
-def draw_mesh(vertexes, triangles, landmarks):
+def draw_mesh(vertexes, triangles, landmarks, v_size):
     glEnableClientState(GL_VERTEX_ARRAY)
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_LIGHTING)
-    glVertexPointer(4, GL_FLOAT, 0, vertexes)
+    glVertexPointer(v_size, GL_FLOAT, 0, vertexes)
     # fill triangles
     glDrawElements(GL_TRIANGLES, triangles.size, GL_UNSIGNED_INT, triangles)
 
@@ -43,20 +44,21 @@ def draw_mesh(vertexes, triangles, landmarks):
 
 
 def render():
-    vertexes, triangles, landmarks, f, gt, gt_opacity, gt_aspectratio = load_parameters()
+    vertexes, triangles, landmarks, f, gt, gt_opacity, gt_aspectratio, v_size = load_parameters()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     glLoadIdentity()
-    glMultMatrixf(np.array([[f, 0, 0, 0],
-                            [0, f, 0, 0],
-                            [0, 0, -1, -0.01],
-                            [0, 0, -1, 0]], dtype=np.float32).transpose())
+    # glMultMatrixf(np.array([[f, 0, 0, 0],
+    #                         [0, f, 0, 0],
+    #                         [0, 0, -1, -0.01],
+    #                         [0, 0, -1, 0]], dtype=np.float32).transpose())
+    glMultMatrixf(f.transpose())
     # gluPerspective(75, 800 / 800, 0.1, 100)
     # gluLookAt(*(0, 0, 3), *(0, 0, 0), *(0, 1, 0))
 
     # 画人头
     glDisable(GL_TEXTURE_2D)
-    draw_mesh(vertexes, triangles, landmarks)
+    draw_mesh(vertexes, triangles, landmarks, v_size)
 
     # 画叠上去
     if gt is not None:
@@ -64,8 +66,8 @@ def render():
         glLoadIdentity()
         glEnable(GL_TEXTURE_2D)
         glColor4f(1, 1, 1, gt_opacity)
-        if gt_aspectratio>1:
-            gt_aspectratio = 1/gt_aspectratio
+        if gt_aspectratio > 1:
+            gt_aspectratio = 1 / gt_aspectratio
             with quads(texture=1):
                 glVertex2f(-1, -gt_aspectratio)
                 glTexCoord2f(0, 1)
@@ -85,7 +87,6 @@ def render():
                 glTexCoord2f(1, 0)
                 glVertex2f(-gt_aspectratio, 1)
                 glTexCoord2f(1, 1)
-
 
 
 def set_photo(img):
@@ -179,7 +180,7 @@ def glfw_main(window_size):
 
 
 def start_render_window_thread(window_size):
-    t = threading.Thread(target=glfw_main,args=(window_size,))
+    t = threading.Thread(target=glfw_main, args=(window_size,))
     t.start()
 
 
@@ -192,12 +193,17 @@ if __name__ == '__main__':
     import fwmesh
 
     vertex, triangle, landmark = fwmesh.read_mesh_def()
-    vertex = vertex.reshape(-1,4)
-    vertex += np.array([0,0,-2,0])
+    vertex = vertex.reshape(-1, 4)
+    import vertex_screen as vt
+
+    m_proj = vt.build_projection_matrix(1)
+    m_rt = vt.rt_matrix(np.array([[0, 0, 0, 0, 0, -2]]))[0]
     write_parameters(0, vertex)
     write_parameters(1, triangle)
     write_parameters(2, landmark)
-    write_parameters(3, 1)
+    write_parameters(3, m_proj @ m_rt)
     write_parameters(5, 0.8)
     write_parameters(6, 1)
+    write_parameters(7, 4)
     start_render_window_thread(1200)
+    refresh_display()

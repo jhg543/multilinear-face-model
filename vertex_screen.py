@@ -73,6 +73,13 @@ def rt(v, tx, ty, tz, r1, r2, r3):
     m = (m_t @ m_r1 @ m_r2 @ m_r3)[0] @ v
     return m
 
+def rt_matrix(r3t3):
+    m_r1 = build_rotate_matrix(r3t3[:, 0], 0, 1)
+    m_r2 = build_rotate_matrix(r3t3[:, 1], 0, 2)
+    m_r3 = build_rotate_matrix(r3t3[:, 2], 1, 2)
+    m_t = build_transition_matrix(r3t3[:, 3:6])
+    return m_t @ m_r1 @ m_r2 @ m_r3
+
 
 def rt_multiframe(vertexes, r3t3, f):
     """
@@ -87,14 +94,11 @@ def rt_multiframe(vertexes, r3t3, f):
     vertexes = np.concatenate([vertexes, np.ones((vertexes.shape[0], vertexes.shape[1], 1))], axis=2)
 
     # build transform matrix
-    m_r1 = build_rotate_matrix(r3t3[:, 0], 0, 1)
-    m_r2 = build_rotate_matrix(r3t3[:, 1], 0, 2)
-    m_r3 = build_rotate_matrix(r3t3[:, 2], 1, 2)
-    m_t = build_transition_matrix(r3t3[:, 3:6])
 
+    m_rt = rt_matrix(r3t3)
     m_proj = build_projection_matrix(f)
 
-    mat = m_proj @ (m_t @ m_r1 @ m_r2 @ m_r3)
+    mat = m_proj @ m_rt
     vertexes = np.transpose(vertexes, (0, 2, 1))
     vertexes = mat @ vertexes
     vertexes = np.transpose(vertexes, (0, 2, 1))

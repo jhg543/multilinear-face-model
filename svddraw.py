@@ -105,16 +105,17 @@ def build_landmark_img(dx, w):
     return img
 
 
-def render_model(c, u, m, guess_frame):
+def render_model(blend_shape, m, guess_frame , f):
     guess_frame0 = guess_frame
-    guess_r3 = guess_frame0[0:3]
-    guess_t3 = guess_frame0[3:6]
     guess_e = guess_frame0[6:]
 
     guess_e = np.concatenate([np.array(1 - np.sum(guess_e))[None], guess_e])
-    rv = vt.rt(vec_to_xyzw(guess_e @ get_blend_shape(c, u) + m), *guess_t3,
-               *guess_r3).transpose()
+    rv = guess_e @ blend_shape + m
     draw.write_parameters(0, rv)
+    m_proj = vt.build_projection_matrix(f)
+    m_rt = vt.rt_matrix(np.array(guess_frame[None,0:6]))[0]
+    draw.write_parameters(3, m_proj@m_rt)
+    draw.write_parameters(7, 3)
 
 
 def test():
@@ -125,9 +126,10 @@ def test():
     draw.write_parameters(0, vertex)
     draw.write_parameters(1, triangle)
     draw.write_parameters(2, landmark)
-    draw.write_parameters(3, focus_length)
+    draw.write_parameters(3, np.identity(4))
     draw.write_parameters(5, 0.7)
     draw.write_parameters(6, 1.33)
+    draw.write_parameters(7, 4)
 
     se, ue, si, ui, c, m = fwmodel.load_compact_svd('C:\\dev\\3dface\\svd2', 40, 47)
     c = T.mode_dot(c, ue, 1)  # we don't need SVD on exp axis
@@ -150,6 +152,7 @@ def test():
     draw.start_render_window_thread(1200)
     u, gs = do_bootstrap(d, md, ui, cam_landmarks * (-1))
     test_bs = get_blend_shape(d, u)
+    bs_full = get_blend_shape(c, u)
     # for i in range(min_keyframes):
     #     render_model(c, u, m, gs[i])
     #     draw.write_parameters(3, 2)
@@ -174,7 +177,6 @@ def test():
         long_edge = h
     current_guess = np.array([np.concatenate([[0, 0, -2, 0.001, 0.001, 0], np.zeros(46)])])
     f = 2
-    draw.write_parameters(3, f)
     while True:
         ret, frame = cap.read()
         if frame is None:
@@ -198,7 +200,7 @@ def test():
             gt_frame = landmark_detection_to_screen_xy(d, w, h) * -1
 
             current_guess = solve_rtes_frame(test_bs, current_guess, f, 1e9, md, gt_frame[None, :, :])
-            render_model(c, u, m, current_guess[0])
+            render_model(bs_full, m, current_guess[0], f)
 
         # for i in landmark:
         #     sc = screen_xyzw_to_pixel(scx[i], long_edge // 2, w // 2, h // 2)
