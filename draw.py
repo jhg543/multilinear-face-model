@@ -47,7 +47,10 @@ def render():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
     glLoadIdentity()
-    glMultMatrixf(np.array([[f, 0, 0, 0], [0, f, 0, 0], [0, 0, -1, -1], [0, 0, -0.01, 0]], dtype=np.float32))
+    glMultMatrixf(np.array([[f, 0, 0, 0],
+                            [0, f, 0, 0],
+                            [0, 0, -1, -0.01],
+                            [0, 0, -1, 0]], dtype=np.float32).transpose())
     # gluPerspective(75, 800 / 800, 0.1, 100)
     # gluLookAt(*(0, 0, 3), *(0, 0, 0), *(0, 1, 0))
 
@@ -134,10 +137,10 @@ def glut_flush_display():
     glutPostRedisplay()
 
 
-def glut_main():
+def glut_main(window_size):
     glutInit()
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH)
-    glutInitWindowSize(800, 800)
+    glutInitWindowSize(window_size, window_size)
     window = glutCreateWindow(b"opengl")
     init()
     glutDisplayFunc(glut_loop)
@@ -145,11 +148,11 @@ def glut_main():
     glutMainLoop()
 
 
-def glfw_main():
+def glfw_main(window_size):
     if not glfw.init():
         return
     # Create a windowed mode window and its OpenGL context
-    window = glfw.create_window(800, 800, "Display", None, None)
+    window = glfw.create_window(window_size, window_size, "Display", None, None)
     if not window:
         glfw.terminate()
         return
@@ -170,8 +173,8 @@ def glfw_main():
     glfw.terminate()
 
 
-def start_render_loop_thread():
-    t = threading.Thread(target=glfw_main)
+def start_render_window_thread(window_size):
+    t = threading.Thread(target=glfw_main,args=(window_size,))
     t.start()
 
 
@@ -179,10 +182,12 @@ if __name__ == '__main__':
     import fwmesh
 
     vertex, triangle, landmark = fwmesh.read_mesh_def()
+    vertex = vertex.reshape(-1,4)
+    vertex += np.array([0,0,-2,0])
     write_parameters(0, vertex)
     write_parameters(1, triangle)
     write_parameters(2, landmark)
-    write_parameters(3, 5)
+    write_parameters(3, 1)
     write_parameters(5, 0.8)
     write_parameters(6, 1)
-    start_render_loop_thread()
+    start_render_window_thread(1200)
