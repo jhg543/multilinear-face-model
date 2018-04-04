@@ -14,7 +14,7 @@ def build_rotate_matrix(r, a, b):
     n_frames = r.shape[0]
     c1 = np.cos(r)
     s1 = np.sin(r)
-    mat = np.zeros((n_frames, 4, 4), dtype=np.float32)
+    mat = np.zeros((n_frames, 4, 4), dtype=np.float64)
     mat[:, 0, 0] = 1
     mat[:, 1, 1] = 1
     mat[:, 2, 2] = 1
@@ -36,7 +36,7 @@ def build_transition_matrix(t):
     :return:  (n,4,4)
     """
     n_frames = t.shape[0]
-    mat = np.zeros((n_frames, 4, 4), dtype=np.float32)
+    mat = np.zeros((n_frames, 4, 4), dtype=np.float64)
     mat[:, 0, 0] = 1
     mat[:, 1, 1] = 1
     mat[:, 2, 2] = 1
@@ -50,7 +50,7 @@ def build_transition_matrix(t):
 a_proj = np.array([[1, 0, 0, 0],
                    [0, 1, 0, 0],
                    [0, 0, -1, -0.01],
-                   [0, 0, -1, 0]], dtype=np.float32)
+                   [0, 0, -1, 0]], dtype=np.float64)
 
 
 def build_projection_matrix(f):
@@ -66,12 +66,40 @@ def build_projection_matrix(f):
 
 
 def rt(v, tx, ty, tz, r1, r2, r3):
-    m_t = build_transition_matrix(np.array([tx, ty, tz], dtype=np.float32).reshape(1, 3))
+    m_t = build_transition_matrix(np.array([tx, ty, tz], dtype=np.float64).reshape(1, 3))
     m_r1 = build_rotate_matrix(np.full(1, r1, np.float32), 0, 1)
     m_r2 = build_rotate_matrix(np.full(1, r2, np.float32), 0, 2)
     m_r3 = build_rotate_matrix(np.full(1, r3, np.float32), 1, 2)
     m = (m_t @ m_r1 @ m_r2 @ m_r3)[0] @ v
     return m
+
+
+def rt_multiframe(vertexes, r3t3, f):
+    """
+
+    :param vertexes: size(n_frames * n_vertex_per_frame * 3)
+    :param r3t3: shape(n_frames, 6)   6 = [r1,r2,r3,tx,ty,tz]
+    :param f: focus_length (assume aspect ratio 1)
+    :return: size(n_frames * n_vertex_per_frame * 2)
+    """
+    n_frames = r3t3.shape[0]
+    vertexes = vertexes.reshape((n_frames, -1, 3))
+    vertexes = np.concatenate([vertexes, np.ones((vertexes.shape[0], vertexes.shape[1], 1))], axis=2)
+
+    # build transform matrix
+    m_r1 = build_rotate_matrix(r3t3[:, 0], 0, 1)
+    m_r2 = build_rotate_matrix(r3t3[:, 1], 0, 2)
+    m_r3 = build_rotate_matrix(r3t3[:, 2], 1, 2)
+    m_t = build_transition_matrix(r3t3[:, 3:6])
+
+    m_proj = build_projection_matrix(f)
+
+    mat = m_proj @ (m_t @ m_r1 @ m_r2 @ m_r3)
+    vertexes = np.transpose(vertexes, (0, 2, 1))
+    vertexes = mat @ vertexes
+    vertexes = np.transpose(vertexes, (0, 2, 1))
+    vertexes = vertexes[:, :, 0:2] / vertexes[:, :, 3][:, :, None]
+    return vertexes
 
 
 def proj(v, f):
