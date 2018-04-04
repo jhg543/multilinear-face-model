@@ -148,6 +148,9 @@ def glut_main(window_size):
     glutMainLoop()
 
 
+cond = threading.Condition()
+
+
 def glfw_main(window_size):
     if not glfw.init():
         return
@@ -163,6 +166,8 @@ def glfw_main(window_size):
     # Loop until the user closes the window
     while not glfw.window_should_close(window):
         # Render here, e.g. using pyOpenGL
+        with cond:
+            cond.wait(0.01)
         render()
         # Swap front and back buffers
         glfw.swap_buffers(window)
@@ -176,6 +181,11 @@ def glfw_main(window_size):
 def start_render_window_thread(window_size):
     t = threading.Thread(target=glfw_main,args=(window_size,))
     t.start()
+
+
+def refresh_display():
+    with cond:
+        cond.notify()
 
 
 if __name__ == '__main__':
