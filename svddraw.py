@@ -48,18 +48,18 @@ def build_test_gt_landmark(vv, t3r3, focus_length):
     return a[:, :, 0:2] / a[:, :, 3][:, :, None]
 
 
-def solve_rtes_frame(test_bs, rte, f, stopcond, md, gt_landmarks):
+def solve_rtes_frame(test_bs, rte, f, md, gt_landmarks, **opt_args):
     bound_bfgs = [(-2, 2)] * 3 + [(None, None)] * 2 + [(None, -1)] + [(0, 1)] * 46
     guess_frame0, e_frame0, info = op.fmin_l_bfgs_b(cost.f_sq, rte[0], bounds=bound_bfgs, approx_grad=True,
-                                                    factr=stopcond,
-                                                    args=(cost.f_p_2, md, gt_landmarks[0], f, test_bs, 0.01))
+                                                    args=(cost.f_p_2, md, gt_landmarks[0], f, test_bs, 0.01),
+                                                    **opt_args)
     print("e_frame0={} r={} t={}".format(e_frame0, guess_frame0[0:3], guess_frame0[3:6]))
     guess_frames = [guess_frame0]
     e_frames = [e_frame0]
     for i in range(1, gt_landmarks.shape[0]):
-        gf, ef, ei = op.fmin_l_bfgs_b(cost.f_sq, rte[i], bounds=bound_bfgs, factr=stopcond,
+        gf, ef, ei = op.fmin_l_bfgs_b(cost.f_sq, rte[i], bounds=bound_bfgs,
                                       approx_grad=True,
-                                      args=(cost.f_p_2, md, gt_landmarks[i], f, test_bs, 0.01))
+                                      args=(cost.f_p_2, md, gt_landmarks[i], f, test_bs, 0.01), **opt_args)
         print("e_frame{}={} r={} t={}".format(i, ef, gf[0:3], gf[3:6]))
         guess_frames.append(gf)
         e_frames.append(ef)
@@ -76,7 +76,7 @@ def do_one_iteration(u, rte, f, d, md, gt_landmarks):
 
     print(r.x)
     test_bs = get_blend_shape(d, r.x)
-    guess_frames = solve_rtes_frame(test_bs, rte, f, 1e9, md, gt_landmarks)
+    guess_frames = solve_rtes_frame(test_bs, rte, f, md, gt_landmarks, maxiter=3)
     return r.x, guess_frames
 
 
@@ -87,7 +87,7 @@ def do_bootstrap(d, md, ui, gt_landmarks):
     initial_u_guess = np.average(ui, axis=0)
     initial_rte_guess = [np.concatenate([[0, 0, 0, 0.001, 0.001, -2], np.zeros(46)])] * gt_landmarks.shape[0]
     test_bs = get_blend_shape(d, initial_u_guess)
-    guess_frames = solve_rtes_frame(test_bs, initial_rte_guess, f, 1e9, md, gt_landmarks)
+    guess_frames = solve_rtes_frame(test_bs, initial_rte_guess, f, md, gt_landmarks, maxiter=10)
 
     u = initial_u_guess
     rte = guess_frames
@@ -105,7 +105,7 @@ def build_landmark_img(dx, w):
     return img
 
 
-def render_model(blend_shape, m, guess_frame , f):
+def render_model(blend_shape, m, guess_frame, f):
     guess_frame0 = guess_frame
     guess_e = guess_frame0[6:]
 
@@ -113,9 +113,63 @@ def render_model(blend_shape, m, guess_frame , f):
     rv = guess_e @ blend_shape + m
     draw.write_parameters(0, rv)
     m_proj = vt.build_projection_matrix(f)
-    m_rt = vt.rt_matrix(np.array(guess_frame[None,0:6]))[0]
-    draw.write_parameters(3, m_proj@m_rt)
+    m_rt = vt.rt_matrix(np.array(guess_frame[None, 0:6]))[0]
+    draw.write_parameters(3, m_proj @ m_rt)
     draw.write_parameters(7, 3)
+
+
+def test_fx_speed():
+    se, ue, si, ui, c, m = fwmodel.load_compact_svd('C:\\dev\\3dface\\svd2', 40, 47)
+    c = T.mode_dot(c, ue, 1)  # we don't need SVD on exp axis
+    f = 2
+    d, md = truncate_core_tensor(c, m, np.array(range(68)))
+    c = None
+    initial_u_guess = np.average(ui, axis=0)
+    gt_landmarks = np.zeros((1, 68, 2))
+    initial_rte_guess = [np.concatenate([[0, 0, 0, 0.001, 0.001, -2], np.zeros(46)])] * gt_landmarks.shape[0]
+    test_bs = get_blend_shape(d, initial_u_guess)
+    ss = time.time()
+    print("start")
+    for i in range(100):
+        cost.f_p_2(initial_rte_guess[0], md, gt_landmarks[0], f, test_bs, 0.01)
+    print("end")
+    print(time.time() - ss)
+
+
+def test_landmark_speed():
+    vertex, triangle, landmark = fwmesh.read_mesh_def()
+    draw.write_parameters(0, vertex)
+    draw.write_parameters(1, triangle)
+    draw.write_parameters(2, landmark)
+    draw.write_parameters(3, np.identity(4))
+    draw.write_parameters(5, 0.7)
+    draw.write_parameters(6, 1.33)
+    draw.write_parameters(7, 4)
+
+    cap = cv2.VideoCapture(1)
+    ret, frame = cap.read()
+    if frame is None:
+        raise Exception('No frames captured')
+    h, w, channel = frame.shape
+    draw.write_parameters(6, w / h)
+    draw.start_render_window_thread(1200)
+    ss = time.time()
+    dd = landmark_detector.DLibLandmarkTracker("C:\\dev\\3dface\\landmark\\shape_predictor_68_face_landmarks.dat")
+    for x in range(1000):
+        ret, frame = cap.read()
+        if frame is None:
+            raise Exception('No frames captured')
+        img = frame.copy()
+        d = dd.detect(img)
+        if d is not None:
+            for i in range(68):
+                x, y = d[i]
+                cv2.circle(img, (x, y), 3, (0, 255, 255))
+                cv2.putText(img, "{}".format(i), (x, y), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
+        draw.write_parameters(4, img)
+        draw.refresh_display()
+    print(time.time() - ss)
+    cap.release()
 
 
 def test():
@@ -153,6 +207,7 @@ def test():
     u, gs = do_bootstrap(d, md, ui, cam_landmarks * (-1))
     test_bs = get_blend_shape(d, u)
     bs_full = get_blend_shape(c, u)
+
     # for i in range(min_keyframes):
     #     render_model(c, u, m, gs[i])
     #     draw.write_parameters(3, 2)
@@ -177,30 +232,33 @@ def test():
         long_edge = h
     current_guess = np.array([np.concatenate([[0, 0, -2, 0.001, 0.001, 0], np.zeros(46)])])
     f = 2
+    dd = landmark_detector.DLibLandmarkTracker("C:\\dev\\3dface\\landmark\\shape_predictor_68_face_landmarks.dat")
     while True:
         ret, frame = cap.read()
         if frame is None:
             raise Exception('摄像头坏了。')
         img = frame.copy()
-        d = landmark_detector.detect_landmark_68(img)
+        d = dd.detect(img)
         if d is not None:
             for i in range(68):
                 x, y = d[i]
                 cv2.circle(img, (x, y), 3, (0, 255, 255))
                 cv2.putText(img, "{}".format(i), (x, y), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255))
-            # if len(keyframes) < min_keyframes:
-            #     keyframes.append(landmark_detection_to_screen_xy(d, w, h))
-            #     idx = len(keyframes)
-            #     cv2.imwrite("C:\\dev\\3dface\\keyframes\\{}.jpg".format(idx), img)
-            #     print(idx)
-            #     if idx == min_keyframes:
-            #         a = np.array(keyframes)
-            #         a.tofile("C:\\dev\\3dface\\keyframes\\landmarks")
-            #         print(a.dtype, a.shape)
-            gt_frame = landmark_detection_to_screen_xy(d, w, h) * -1
+                # if len(keyframes) < min_keyframes:
+                #     keyframes.append(landmark_detection_to_screen_xy(d, w, h))
+                #     idx = len(keyframes)
+                #     cv2.imwrite("C:\\dev\\3dface\\keyframes\\{}.jpg".format(idx), img)
+                #     print(idx)
+                #     if idx == min_keyframes:
+                #         a = np.array(keyframes)
+                #         a.tofile("C:\\dev\\3dface\\keyframes\\landmarks")
+                #         print(a.dtype, a.shape)
 
-            current_guess = solve_rtes_frame(test_bs, current_guess, f, 1e9, md, gt_frame[None, :, :])
+            gt_frame = landmark_detection_to_screen_xy(d, w, h) * -1
+            current_guess = solve_rtes_frame(test_bs, current_guess, f, md, gt_frame[None, :, :], maxiter=2)
             render_model(bs_full, m, current_guess[0], f)
+        else:
+            last_bbox = (-1, -1, -1, -1)
 
         # for i in landmark:
         #     sc = screen_xyzw_to_pixel(scx[i], long_edge // 2, w // 2, h // 2)
@@ -215,3 +273,5 @@ def test():
 
 if __name__ == '__main__':
     test()
+    # test_fx_speed()
+    # test_landmark_speed()
